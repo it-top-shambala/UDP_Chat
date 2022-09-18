@@ -2,39 +2,52 @@
 using System.Net.Sockets;
 using System.Text;
 
-Console.Write("Введите ip-адрес: ");
-var ip = Console.ReadLine();
+const int PORT = 8001;
+var ip = IPAddress.Parse("225.5.5.5");
 
-Console.Write("Введите порт отправки сообщений: ");
-var sendPort = Convert.ToInt32(Console.ReadLine());
+Task.Run(() => ReceiveMessage(ip, PORT));
 
-Console.Write("Введите порт приёмки сообщений: ");
-var receivePort = Convert.ToInt32(Console.ReadLine());
+SendMessage(ip, PORT);
 
-Task.Run(() => ReceiveMessage(receivePort));
-
-SendMessage(ip, sendPort);
-
-void SendMessage(string host, int port)
+void SendMessage(IPAddress ipAddress, int port)
 {
     using var udp = new UdpClient();
+    var endPoint = new IPEndPoint(ipAddress, port);
     while (true)
     {
         Console.Write("Введите сообщение: ");
         var message = Console.ReadLine();
         var data = Encoding.UTF8.GetBytes(message);
-        udp.Send(data, data.Length, host, port);
+        udp.Send(data, data.Length, endPoint);
     }
 }
 
-void ReceiveMessage(int port)
+void ReceiveMessage(IPAddress endPoint, int port)
 {
     using var udp = new UdpClient(port);
-    var ip = new IPEndPoint(IPAddress.Any, 0);
+    var point = new IPEndPoint(IPAddress.Any, 0);
+    udp.JoinMulticastGroup(endPoint);
+    var localIp = LocalIPAddress();
     while (true)
     {
-        var data = udp.Receive(ref ip);
+        var data = udp.Receive(ref point);
+        if (point.Address.Equals(localIp))
+        {
+            continue;
+        }
         var message = Encoding.UTF8.GetString(data);
         Console.WriteLine($"Собеседник: {message}");
     }
+}
+
+IPAddress LocalIPAddress()
+{
+    var  host = Dns.GetHostEntry(Dns.GetHostName());
+    foreach (var ipAddress in host.AddressList)
+    {
+        if (ipAddress.AddressFamily != AddressFamily.InterNetwork) continue;
+        return ipAddress;
+    }
+
+    return IPAddress.Any;
 }
